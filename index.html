@@ -2,35 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>mreader — minimal reader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a1815" />
+  <title>mreader</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app">
-    <!-- Drop / open screen -->
-    <div id="landing" class="landing">
-      <div class="landing-inner">
-        <h1 class="logo">mreader</h1>
-        <p class="tagline">A minimal reader for EPUB &amp; PDF</p>
-        <label class="open-btn">
-          Open a book
-          <input type="file" id="file-input" accept=".epub,.pdf,application/epub+zip,application/pdf" hidden />
-        </label>
-        <p class="hint">or drop a file anywhere</p>
-      </div>
-    </div>
+    <!-- ===== Library dashboard ===== -->
+    <section id="library" class="library">
+      <header class="lib-header">
+        <h1 class="lib-title">mreader</h1>
+        <button id="btn-edit" class="text-btn hidden">Edit</button>
+      </header>
 
-    <!-- Reader -->
-    <div id="reader" class="reader hidden">
+      <div id="book-grid" class="book-grid"></div>
+
+      <div id="lib-empty" class="lib-empty hidden">
+        <div class="empty-art">📚</div>
+        <p class="empty-msg">Your library is empty</p>
+        <button class="open-btn" id="empty-add">Add a book</button>
+        <p class="hint">EPUB &amp; PDF · or drop a file anywhere</p>
+      </div>
+
+      <button id="fab-add" class="fab" title="Add book" aria-label="Add book">+</button>
+      <input type="file" id="file-input" accept=".epub,.pdf,application/epub+zip,application/pdf" multiple hidden />
+    </section>
+
+    <!-- ===== Reader ===== -->
+    <section id="reader" class="reader hidden">
       <header class="toolbar">
-        <button class="tb-btn" id="btn-toc" title="Table of contents">☰</button>
-        <button class="tb-btn" id="btn-library" title="Open another book">⌂</button>
+        <button class="tb-btn" id="btn-back" title="Library" aria-label="Back to library">‹</button>
+        <button class="tb-btn" id="btn-toc" title="Contents" aria-label="Contents">☰</button>
         <span class="book-title" id="book-title"></span>
         <div class="spacer"></div>
         <button class="tb-btn" id="btn-font-dec" title="Smaller text">A−</button>
         <button class="tb-btn" id="btn-font-inc" title="Larger text">A+</button>
-        <button class="tb-btn" id="btn-theme" title="Toggle theme">◐</button>
+        <button class="tb-btn" id="btn-theme" title="Theme">◐</button>
       </header>
 
       <div id="toc-overlay" class="toc-overlay hidden"></div>
@@ -42,6 +50,7 @@
       <main class="viewport" id="viewport">
         <div id="epub-area" class="epub-area hidden"></div>
         <div id="pdf-area" class="pdf-area hidden"></div>
+        <div id="loading" class="loading hidden"><div class="spinner"></div></div>
       </main>
 
       <button class="nav nav-prev" id="btn-prev" title="Previous">‹</button>
@@ -51,7 +60,7 @@
         <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
         <span class="location" id="location"></span>
       </footer>
-    </div>
+    </section>
   </div>
 
   <script type="module" src="/app.js"></script>
