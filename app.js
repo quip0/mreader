@@ -497,19 +497,46 @@ const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 // toggle the bar, and handles pinch-to-resize.
 function attachEpubOverlay(target) {
   target.style.touchAction = "none"; // we own all gestures here
-  let sc = null, y0 = 0, x0 = 0, lastY = 0, lastT = 0, vel = 0, moved = 0;
+  // iOS UIScrollView-style deceleration: velocity decays ~0.9955 per ms of
+  // real time (frame-rate independent, so it feels the same at 60 or 120 Hz).
+  const DECEL = 0.9955;
+  const MAX_V = 5;      // px/ms cap, so a hard flick can't launch absurdly far
+  const MIN_V = 0.04;   // px/ms — below this the glide has effectively stopped
+
+  let sc = null, x0 = 0, lastY = 0, moved = 0;
   let single = false, touchUsed = false;
   let pinching = false, pinchStart = 0, pinchBase = 0, pinchLast = 0;
   let momentum = 0, mx = 0, my = 0;
+  let samples = []; // recent [time, clientY] for a windowed velocity estimate
 
+  const now = () => performance.now();
   const stopMomentum = () => { if (momentum) { cancelAnimationFrame(momentum); momentum = 0; } };
+
+  // Velocity (px/ms, sign = finger direction) over the last ~80 ms of movement.
+  const flingVelocity = () => {
+    if (samples.length < 2) return 0;
+    const last = samples[samples.length - 1];
+    let first = last;
+    for (let i = samples.length - 1; i >= 0; i--) {
+      first = samples[i];
+      if (last[0] - samples[i][0] >= 80) break;
+    }
+    const dt = last[0] - first[0];
+    return dt > 0 ? (last[1] - first[1]) / dt : 0;
+  };
+
   const startMomentum = () => {
-    let v = vel * 16; // px per frame from px/ms
-    if (Math.abs(v) < 0.6) return;
-    const step = () => {
-      v *= 0.94;
-      sc.scrollTop -= v;
-      momentum = Math.abs(v) > 0.4 ? requestAnimationFrame(step) : 0;
+    let v = flingVelocity();
+    if (Math.abs(v) < MIN_V) return;
+    v = Math.max(-MAX_V, Math.min(MAX_V, v));
+    let prev = now();
+    const step = (t) => {
+      const dt = Math.min(32, t - prev); prev = t;
+      sc.scrollTop -= v * dt;                 // integrate distance over real time
+      v *= Math.pow(DECEL, dt);               // time-based exponential decay
+      const max = sc.scrollHeight - sc.clientHeight;
+      const atEdge = sc.scrollTop <= 0 || sc.scrollTop >= max;
+      momentum = (!atEdge && Math.abs(v) > MIN_V) ? requestAnimationFrame(step) : 0;
     };
     momentum = requestAnimationFrame(step);
   };
@@ -523,9 +550,10 @@ function attachEpubOverlay(target) {
       return;
     }
     if (e.touches.length !== 1) { single = false; return; }
-    single = true; moved = 0; vel = 0;
+    single = true; moved = 0;
     const t = e.touches[0];
-    x0 = t.clientX; y0 = lastY = t.clientY; lastT = Date.now();
+    x0 = t.clientX; lastY = t.clientY;
+    samples = [[now(), t.clientY]];
   }, { passive: true });
 
   target.addEventListener("touchmove", (e) => {
@@ -538,12 +566,11 @@ function attachEpubOverlay(target) {
     }
     if (!single || e.touches.length !== 1 || !sc) return;
     const t = e.touches[0];
-    const dy = t.clientY - lastY;
-    const now = Date.now();
-    vel = dy / (now - lastT || 16);
-    sc.scrollTop -= dy;            // drag down → scroll up, and vice versa
-    moved += Math.abs(dy);
-    lastY = t.clientY; lastT = now;
+    sc.scrollTop -= t.clientY - lastY;   // 1:1 finger tracking
+    moved += Math.abs(t.clientY - lastY);
+    lastY = t.clientY;
+    samples.push([now(), t.clientY]);
+    if (samples.length > 6) samples.shift();
   }, { passive: true });
 
   target.addEventListener("touchend", (e) => {
