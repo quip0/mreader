@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mreader — minimal reader</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Drop / open screen -->
+    <div id="landing" class="landing">
+      <div class="landing-inner">
+        <h1 class="logo">mreader</h1>
+        <p class="tagline">A minimal reader for EPUB &amp; PDF</p>
+        <label class="open-btn">
+          Open a book
+          <input type="file" id="file-input" accept=".epub,.pdf,application/epub+zip,application/pdf" hidden />
+        </label>
+        <p class="hint">or drop a file anywhere</p>
+      </div>
+    </div>
+
+    <!-- Reader -->
+    <div id="reader" class="reader hidden">
+      <header class="toolbar">
+        <button class="tb-btn" id="btn-toc" title="Table of contents">☰</button>
+        <button class="tb-btn" id="btn-library" title="Open another book">⌂</button>
+        <span class="book-title" id="book-title"></span>
+        <div class="spacer"></div>
+        <button class="tb-btn" id="btn-font-dec" title="Smaller text">A−</button>
+        <button class="tb-btn" id="btn-font-inc" title="Larger text">A+</button>
+        <button class="tb-btn" id="btn-theme" title="Toggle theme">◐</button>
+      </header>
+
+      <div id="toc-overlay" class="toc-overlay hidden"></div>
+      <aside id="toc-panel" class="toc-panel hidden">
+        <div class="toc-head">Contents</div>
+        <nav id="toc-list" class="toc-list"></nav>
+      </aside>
+
+      <main class="viewport" id="viewport">
+        <div id="epub-area" class="epub-area hidden"></div>
+        <div id="pdf-area" class="pdf-area hidden"></div>
+      </main>
+
+      <button class="nav nav-prev" id="btn-prev" title="Previous">‹</button>
+      <button class="nav nav-next" id="btn-next" title="Next">›</button>
+
+      <footer class="statusbar">
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <span class="location" id="location"></span>
+      </footer>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
