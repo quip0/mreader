@@ -12,7 +12,6 @@ const dom = {
   library: el("library"),
   bookGrid: el("book-grid"),
   libEmpty: el("lib-empty"),
-  btnEdit: el("btn-edit"),
   fab: el("fab-add"),
   emptyAdd: el("empty-add"),
   fileInput: el("file-input"),
@@ -26,12 +25,8 @@ const dom = {
   gestureLayer: el("gesture-layer"),
   loading: el("loading"),
   debugHud: el("debug-hud"),
-  prev: el("btn-prev"),
-  next: el("btn-next"),
   progressFill: el("progress-fill"),
   location: el("location"),
-  fontInc: el("btn-font-inc"),
-  fontDec: el("btn-font-dec"),
   theme: el("btn-theme"),
   toc: el("btn-toc"),
   tocPanel: el("toc-panel"),
@@ -216,7 +211,6 @@ async function renderLibrary() {
   const empty = books.length === 0;
   dom.libEmpty.classList.toggle("hidden", !empty);
   dom.bookGrid.classList.toggle("hidden", empty);
-  dom.btnEdit.classList.toggle("hidden", empty);
   if (empty) dom.library.classList.remove("editing");
 
   for (const rec of books) {
@@ -257,8 +251,25 @@ async function renderLibrary() {
       if (dom.library.classList.contains("editing")) return;
       openBook(rec);
     });
+
+    // Long-press (or right-click) enters remove mode — no toolbar button needed.
+    let pressTimer = null;
+    const startPress = () => { pressTimer = setTimeout(enterEditing, 500); };
+    const cancelPress = () => clearTimeout(pressTimer);
+    card.addEventListener("touchstart", startPress, { passive: true });
+    card.addEventListener("touchmove", cancelPress, { passive: true });
+    card.addEventListener("touchend", cancelPress);
+    card.addEventListener("contextmenu", (e) => { e.preventDefault(); enterEditing(); });
+
     dom.bookGrid.appendChild(card);
   }
+}
+
+function enterEditing() {
+  dom.library.classList.add("editing");
+}
+function exitEditing() {
+  dom.library.classList.remove("editing");
 }
 
 function escapeHtml(s) {
@@ -268,8 +279,10 @@ function escapeHtml(s) {
 
 function showLibrary() {
   teardown();
+  clearTimeout(chromeTimer);
   dom.reader.classList.add("hidden");
   dom.library.classList.remove("hidden");
+  exitEditing();
   renderLibrary();
 }
 
@@ -277,10 +290,22 @@ function showLibrary() {
 function showReader(title) {
   dom.library.classList.add("hidden");
   dom.reader.classList.remove("hidden");
-  dom.reader.classList.remove("chrome-hidden");
   dom.bookTitle.textContent = title || "";
+  revealChrome(true); // briefly show the bar, then slide it away
 }
 function setLoading(on) { dom.loading.classList.toggle("hidden", !on); }
+
+// Immersive chrome: hidden while reading, revealed on a centre tap.
+let chromeTimer = null;
+function revealChrome(autoHide) {
+  clearTimeout(chromeTimer);
+  dom.reader.classList.remove("chrome-hidden");
+  if (autoHide) chromeTimer = setTimeout(() => dom.reader.classList.add("chrome-hidden"), 2600);
+}
+function toggleChrome() {
+  clearTimeout(chromeTimer);
+  dom.reader.classList.toggle("chrome-hidden");
+}
 
 function teardown() {
   if (state.rendition) { try { state.rendition.destroy(); } catch (e) {} }
@@ -431,9 +456,6 @@ function goNext() {
   if (state.kind === "epub" && state.rendition) state.rendition.next();
   else if (state.kind === "pdf") renderPdfPage(state.pdfPage + 1);
 }
-function toggleChrome() {
-  dom.reader.classList.toggle("chrome-hidden");
-}
 
 /* ================= Gestures (swipe + tap zones) ================= */
 const DEBUG = location.hash.includes("debug");
@@ -526,7 +548,6 @@ function setFont(size) {
   localStorage.setItem("mreader-font", size);
   state.rendition.themes.fontSize(size + "%");
 }
-function changeFont(delta) { setFont(state.fontSize + delta); }
 
 /* ================= Table of contents ================= */
 function openToc() {
@@ -596,16 +617,12 @@ function onKey(e) {
 dom.fileInput.addEventListener("change", (e) => addFiles(e.target.files));
 dom.fab.addEventListener("click", () => dom.fileInput.click());
 dom.emptyAdd.addEventListener("click", () => dom.fileInput.click());
-dom.btnEdit.addEventListener("click", () => {
-  const editing = dom.library.classList.toggle("editing");
-  dom.btnEdit.textContent = editing ? "Done" : "Edit";
+// Tapping empty space in the grid leaves remove mode.
+dom.bookGrid.addEventListener("click", (e) => {
+  if (e.target === dom.bookGrid) exitEditing();
 });
 
 dom.back.addEventListener("click", showLibrary);
-dom.prev.addEventListener("click", goPrev);
-dom.next.addEventListener("click", goNext);
-dom.fontInc.addEventListener("click", () => changeFont(10));
-dom.fontDec.addEventListener("click", () => changeFont(-10));
 dom.theme.addEventListener("click", cycleTheme);
 dom.toc.addEventListener("click", openToc);
 dom.tocOverlay.addEventListener("click", closeToc);

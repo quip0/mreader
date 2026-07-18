@@ -13,7 +13,6 @@
     <section id="library" class="library">
       <header class="lib-header">
         <h1 class="lib-title">mreader</h1>
-        <button id="btn-edit" class="text-btn hidden">Edit</button>
       </header>
 
       <div id="book-grid" class="book-grid"></div>
@@ -22,23 +21,22 @@
         <div class="empty-art">📚</div>
         <p class="empty-msg">Your library is empty</p>
         <button class="open-btn" id="empty-add">Add a book</button>
-        <p class="hint">EPUB &amp; PDF · or drop a file anywhere</p>
+        <p class="hint">EPUB &amp; PDF · long-press a book to remove</p>
       </div>
 
       <button id="fab-add" class="fab" title="Add book" aria-label="Add book">+</button>
       <input type="file" id="file-input" accept=".epub,.pdf,application/epub+zip,application/pdf" multiple hidden />
     </section>
 
-    <!-- ===== Reader ===== -->
+    <!-- ===== Reader (immersive; tap centre to reveal the bar) ===== -->
     <section id="reader" class="reader hidden">
       <header class="toolbar">
         <button class="tb-btn" id="btn-back" title="Library" aria-label="Back to library">‹</button>
-        <button class="tb-btn" id="btn-toc" title="Contents" aria-label="Contents">☰</button>
         <span class="book-title" id="book-title"></span>
         <div class="spacer"></div>
-        <button class="tb-btn" id="btn-font-dec" title="Smaller text">A−</button>
-        <button class="tb-btn" id="btn-font-inc" title="Larger text">A+</button>
-        <button class="tb-btn" id="btn-theme" title="Theme">◐</button>
+        <span class="location" id="location"></span>
+        <button class="tb-btn" id="btn-toc" title="Contents" aria-label="Contents">☰</button>
+        <button class="tb-btn" id="btn-theme" title="Theme" aria-label="Theme">◐</button>
       </header>
 
       <div id="toc-overlay" class="toc-overlay hidden"></div>
@@ -54,15 +52,9 @@
         <div id="gesture-layer" class="gesture-layer hidden"></div>
         <div id="loading" class="loading hidden"><div class="spinner"></div></div>
       </main>
+
+      <div class="progress-line"><div class="progress-fill" id="progress-fill"></div></div>
       <div id="debug-hud" class="debug-hud hidden"></div>
-
-      <button class="nav nav-prev" id="btn-prev" title="Previous">‹</button>
-      <button class="nav nav-next" id="btn-next" title="Next">›</button>
-
-      <footer class="statusbar">
-        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-        <span class="location" id="location"></span>
-      </footer>
     </section>
   </div>
 

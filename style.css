@@ -68,15 +68,6 @@ button { font-family: inherit; }
   letter-spacing: -0.03em;
 }
 
-.text-btn {
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-size: 1rem;
-  font-weight: 600;
-  padding: 0.4rem 0.5rem;
-  cursor: pointer;
-}
 
 .book-grid {
   flex: 1;
@@ -244,15 +235,21 @@ button { font-family: inherit; }
   position: relative;
 }
 
+/* Toolbar overlays the top of the page so reading is edge-to-edge. */
 .toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 0.4rem;
   padding: calc(0.5rem + var(--safe-top)) 0.6rem 0.5rem;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
   z-index: 10;
-  transition: transform 0.25s ease;
+  transition: transform 0.25s ease, opacity 0.25s ease;
 }
 .book-title {
   font-weight: 600;
@@ -279,7 +276,7 @@ button { font-family: inherit; }
 .tb-btn:active { background: color-mix(in srgb, var(--fg) 12%, transparent); }
 #btn-back { font-size: 1.5rem; }
 
-.viewport { flex: 1; position: relative; overflow: hidden; }
+.viewport { position: absolute; inset: 0; overflow: hidden; }
 .epub-area { height: 100%; touch-action: pan-y; }
 
 /* Transparent layer that captures swipes/taps over the EPUB iframe. */
@@ -341,42 +338,15 @@ button { font-family: inherit; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* nav arrows — desktop only; phones use swipe/tap */
-.nav {
+/* Thin, always-visible reading-progress line pinned to the bottom edge. */
+.progress-line {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 5;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 2.5rem;
-  width: 3rem;
-  height: 5rem;
-  cursor: pointer;
-  opacity: 0.4;
-  display: none;
-}
-.nav-prev { left: 0; }
-.nav-next { right: 0; }
-
-.statusbar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.45rem 1rem calc(0.45rem + var(--safe-bottom));
-  background: var(--panel);
-  border-top: 1px solid var(--border);
-  font-size: 0.72rem;
-  color: var(--muted);
-  transition: transform 0.25s ease;
-}
-.progress-track {
-  flex: 1;
-  height: 4px;
-  background: var(--border);
-  border-radius: 999px;
-  overflow: hidden;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  z-index: 9;
+  pointer-events: none;
 }
 .progress-fill {
   height: 100%;
@@ -384,11 +354,16 @@ button { font-family: inherit; }
   background: var(--accent);
   transition: width 0.25s;
 }
-.location { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.location {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding: 0 0.3rem;
+}
 
-/* immersive mode — tap center to hide chrome */
-.reader.chrome-hidden .toolbar { transform: translateY(-100%); }
-.reader.chrome-hidden .statusbar { transform: translateY(100%); }
+/* Immersive mode — tap centre to hide the bar. */
+.reader.chrome-hidden .toolbar { transform: translateY(-100%); opacity: 0; }
 
 /* ================= Table of contents ================= */
 .toc-overlay {
@@ -447,7 +422,5 @@ button { font-family: inherit; }
 /* ================= Desktop niceties ================= */
 @media (min-width: 768px) and (hover: hover) {
   .book-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.5rem 1.3rem; padding: 1.5rem; }
-  .nav { display: block; transition: opacity 0.15s, color 0.15s; }
-  .nav:hover { opacity: 1; color: var(--accent); }
   .book-card:hover .book-cover { transform: translateY(-3px); transition: transform 0.15s; }
 }
