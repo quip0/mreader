@@ -11,6 +11,8 @@ A minimal, client-side reader for **EPUB** and **PDF**. No backend, no uploads �
 - 🎨 Light / sepia / dark themes
 - ⌨️ Keyboard nav — `←` / `→`, Space, PageUp/Down, `Esc` to close panels
 - 🖱️ Drag & drop a file anywhere to open it
+- 📲 Installable PWA — works fully offline once loaded (app shell is
+  cached by a service worker; books live in IndexedDB on the device)
 
 ## Development
 
