@@ -481,12 +481,16 @@ function attachGestures(target) {
     const dt = Date.now() - t0;
     debugLog(`dx=${dx.toFixed(0)} dy=${dy.toFixed(0)} dt=${dt}ms`);
 
-    if (adx > 40 && adx > ady * 1.3) {
-      if (dx < 0) goNext(); else goPrev(); // swipe left = next
-    } else if (adx < 12 && ady < 12 && dt < 350) {
+    if (adx > 35 && adx > ady * 1.3) {
+      // Clear horizontal swipe → turn page.
+      if (dx < 0) goNext(); else goPrev();
+    } else if (ady < 35) {
+      // Anything else that isn't a vertical scroll is a tap. No distance or
+      // duration floor — a finger-roll or a slow tap still counts, so the
+      // centre zone reliably toggles the bar.
       const w = window.innerWidth;
-      if (x < w * 0.3) goPrev();
-      else if (x > w * 0.7) goNext();
+      if (x < w * 0.28) goPrev();
+      else if (x > w * 0.72) goNext();
       else toggleChrome();
     }
   };
