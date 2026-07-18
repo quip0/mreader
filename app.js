@@ -326,6 +326,11 @@ function renderEpub(buffer) {
   rendition.themes.fontSize(state.fontSize + "%");
   applyEpubTheme();
 
+  // Register the gesture hook BEFORE display so the first section gets it too.
+  rendition.hooks.content.register((contents) => {
+    attachGestures(contents.document);
+  });
+
   const saved = state.record && state.record.pos;
   rendition.display(saved && saved.cfi ? saved.cfi : undefined).then(() => setLoading(false));
 
@@ -338,10 +343,6 @@ function renderEpub(buffer) {
   rendition.on("relocated", (loc) => {
     updateEpubProgress();
     if (loc && loc.start) savePosition({ cfi: loc.start.cfi });
-  });
-  // Attach gestures inside each rendered iframe.
-  rendition.hooks.content.register((contents) => {
-    attachGestures(contents.document);
   });
   rendition.on("keyup", onKey);
 }
@@ -419,35 +420,52 @@ function toggleChrome() {
 }
 
 /* ================= Gestures (swipe + tap zones) ================= */
+// `target` may be a DOM element (PDF area) or an iframe Document (EPUB).
 function attachGestures(target) {
-  let x0 = null, y0 = null, t0 = 0;
-  target.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 1) { x0 = null; return; }
-    x0 = e.touches[0].clientX;
-    y0 = e.touches[0].clientY;
-    t0 = Date.now();
-  }, { passive: true });
+  const isDoc = target.nodeType === 9; // Node.DOCUMENT_NODE
+  const listenOn = target;
+  const styleEls = isDoc ? [target.documentElement, target.body] : [target];
 
-  target.addEventListener("touchend", (e) => {
-    if (x0 === null) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - x0;
-    const dy = t.clientY - y0;
+  // Claim horizontal gestures for ourselves; let the browser keep vertical
+  // scrolling. Without this, mobile browsers can hijack the horizontal swipe
+  // (e.g. back/forward navigation) and our handler never sees a clean gesture.
+  styleEls.forEach((el) => { if (el && el.style) el.style.touchAction = "pan-y"; });
+
+  let x0 = null, y0 = null, t0 = 0, tracking = false;
+
+  const begin = (x, y) => { x0 = x; y0 = y; t0 = Date.now(); tracking = true; };
+  const finish = (x, y) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = x - x0, dy = y - y0;
     const adx = Math.abs(dx), ady = Math.abs(dy);
     const dt = Date.now() - t0;
-    x0 = null;
 
-    if (adx > 45 && adx > ady * 1.4) {
+    if (adx > 40 && adx > ady * 1.3) {
       // Horizontal swipe → turn page.
       if (dx < 0) goNext(); else goPrev();
-    } else if (adx < 12 && ady < 12 && dt < 300) {
+    } else if (adx < 12 && ady < 12 && dt < 350) {
       // Tap → left third prev, right third next, middle toggles chrome.
       const w = window.innerWidth;
-      if (t.clientX < w * 0.3) goPrev();
-      else if (t.clientX > w * 0.7) goNext();
+      if (x < w * 0.3) goPrev();
+      else if (x > w * 0.7) goNext();
       else toggleChrome();
     }
+  };
+
+  listenOn.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    begin(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
+  listenOn.addEventListener("touchend", (e) => {
+    const t = e.changedTouches[0];
+    finish(t.clientX, t.clientY);
+  }, { passive: true });
+  listenOn.addEventListener("touchcancel", () => { tracking = false; });
+
+  // Mouse fallback so swipe/tap also work when testing on desktop.
+  listenOn.addEventListener("mousedown", (e) => begin(e.clientX, e.clientY));
+  listenOn.addEventListener("mouseup", (e) => finish(e.clientX, e.clientY));
 }
 
 /* ================= Font size (EPUB) ================= */

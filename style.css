@@ -280,12 +280,13 @@ button { font-family: inherit; }
 #btn-back { font-size: 1.5rem; }
 
 .viewport { flex: 1; position: relative; overflow: hidden; }
-.epub-area { height: 100%; }
+.epub-area { height: 100%; touch-action: pan-y; }
 
 .pdf-area {
   height: 100%;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   text-align: center;
   padding: 0.75rem 0 calc(0.75rem + var(--safe-bottom));
 }
