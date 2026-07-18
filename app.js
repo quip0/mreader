@@ -491,6 +491,19 @@ function debugLog(msg) {
 
 const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 
+// Double-tap detector shared across reader gestures: returns true on the
+// second of two quick taps near the same spot.
+let lastTapT = 0, lastTapX = 0, lastTapY = 0;
+function isDoubleTap(x, y) {
+  const t = performance.now();
+  if (t - lastTapT < 300 && Math.abs(x - lastTapX) < 40 && Math.abs(y - lastTapY) < 40) {
+    lastTapT = 0; // consume, so a triple tap doesn't retrigger
+    return true;
+  }
+  lastTapT = t; lastTapX = x; lastTapY = y;
+  return false;
+}
+
 // EPUB scroll overlay. Sits above the iframe in the top-level document, so
 // touch events are reliable (the iframe swallows them on some devices). It
 // drives the scroll container directly (with momentum), detects taps to
@@ -578,8 +591,11 @@ function attachEpubOverlay(target) {
     if (!single) return;
     single = false;
     const t = e.changedTouches[0];
-    if (Math.abs(t.clientX - x0) < 20 && moved < 12) toggleChrome(); // tap
-    else startMomentum();                                           // fling
+    if (Math.abs(t.clientX - x0) < 20 && moved < 12) {
+      if (isDoubleTap(t.clientX, t.clientY)) toggleChrome(); // double tap → bar
+    } else {
+      startMomentum(); // fling
+    }
   }, { passive: true });
   target.addEventListener("touchcancel", () => { single = false; pinching = false; });
 
@@ -588,7 +604,7 @@ function attachEpubOverlay(target) {
   target.addEventListener("mousedown", (e) => { mx = e.clientX; my = e.clientY; });
   target.addEventListener("mouseup", (e) => {
     if (touchUsed) return;
-    if (Math.abs(e.clientX - mx) < 10 && Math.abs(e.clientY - my) < 10) toggleChrome();
+    if (Math.abs(e.clientX - mx) < 10 && Math.abs(e.clientY - my) < 10 && isDoubleTap(e.clientX, e.clientY)) toggleChrome();
   });
 }
 
@@ -611,13 +627,12 @@ function attachGestures(target) {
       // Clear horizontal swipe → turn page.
       if (dx < 0) goNext(); else goPrev();
     } else if (ady < 35) {
-      // Anything else that isn't a vertical scroll is a tap. No distance or
-      // duration floor — a finger-roll or a slow tap still counts, so the
-      // centre zone reliably toggles the bar.
+      // A tap: left/right edge turns the page (single tap); the centre zone
+      // toggles the bar on a double tap.
       const w = window.innerWidth;
       if (x < w * 0.28) goPrev();
       else if (x > w * 0.72) goNext();
-      else toggleChrome();
+      else if (isDoubleTap(x, y)) toggleChrome();
     }
   };
 
