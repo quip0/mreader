@@ -329,12 +329,10 @@ async function openBook(record) {
   setLoading(true);
   const buffer = await record.blob.arrayBuffer();
   if (record.kind === "epub") {
-    // Overlay captures gestures above the iframe.
-    dom.gestureLayer.classList.remove("hidden");
+    // Continuous scroll: the iframe scrolls natively, so no blocking overlay.
     renderEpub(buffer);
   } else {
-    // PDF area is a normal scrollable element — listen on it directly so
-    // vertical scrolling still works.
+    // PDF area is a normal scrollable element — listen on it directly.
     renderPdf(buffer);
   }
 }
@@ -354,18 +352,24 @@ function renderEpub(buffer) {
   const rendition = book.renderTo("epub-area", {
     width: "100%",
     height: "100%",
-    spread: "none",
-    flow: "paginated",
+    manager: "continuous",
+    flow: "scrolled",
   });
   state.rendition = rendition;
   rendition.themes.fontSize(state.fontSize + "%");
   applyEpubTheme();
 
-  // Gestures are captured by an overlay in THIS document (see openBook),
-  // so they never depend on touch events crossing the iframe boundary.
+  // Text scrolls natively; attach tap-to-toggle + pinch-to-resize inside
+  // each rendered section so we don't block that scrolling.
+  rendition.hooks.content.register((contents) => {
+    attachEpubScrollGestures(contents.document);
+  });
 
   const saved = state.record && state.record.pos;
-  rendition.display(saved && saved.cfi ? saved.cfi : undefined).then(() => setLoading(false));
+  rendition.display(saved && saved.cfi ? saved.cfi : undefined).then(() => {
+    setLoading(false);
+    trackEpubScroll();
+  });
 
   book.ready
     .then(() => book.locations.generate(1600))
@@ -377,7 +381,35 @@ function renderEpub(buffer) {
     updateEpubProgress();
     if (loc && loc.start) savePosition({ cfi: loc.start.cfi });
   });
+  rendition.on("rendered", trackEpubScroll);
   rendition.on("keyup", onKey);
+}
+
+// The scrollable element epub.js creates for continuous flow.
+function epubScrollEl() {
+  const area = dom.epubArea;
+  if (area.scrollHeight - area.clientHeight > 4) return area;
+  return area.querySelector(".epub-container") ||
+    [...area.querySelectorAll("*")].find((el) => el.scrollHeight - el.clientHeight > 4) ||
+    area;
+}
+
+// Continuous mode doesn't emit "relocated" on plain scroll, so watch the
+// scroll container to keep progress and the saved position current.
+function trackEpubScroll() {
+  const container = epubScrollEl();
+  if (!container || container._mrTracked) return;
+  container._mrTracked = true;
+  let raf = 0;
+  container.addEventListener("scroll", () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      updateEpubProgress();
+      const loc = state.rendition && state.rendition.currentLocation();
+      if (loc && loc.start) savePosition({ cfi: loc.start.cfi });
+    });
+  }, { passive: true });
 }
 
 function updateEpubProgress() {
@@ -466,6 +498,54 @@ function debugLog(msg) {
 }
 
 const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+// EPUB scroll mode: the browser scrolls the text vertically on its own. We
+// only add a tap (toggle the bar) and a two-finger pinch (resize font). All
+// listeners are passive so native scrolling/momentum is untouched.
+function attachEpubScrollGestures(doc) {
+  doc.documentElement.style.touchAction = "pan-y";
+  if (doc.body) doc.body.style.touchAction = "pan-y";
+
+  let x0 = 0, y0 = 0, single = false, touchUsed = false;
+  let pinching = false, pinchStart = 0, pinchBase = 0, pinchLast = 0;
+  let mx = 0, my = 0;
+
+  doc.addEventListener("touchstart", (e) => {
+    touchUsed = true;
+    if (e.touches.length === 2) {
+      single = false; pinching = true;
+      pinchStart = dist(e.touches[0], e.touches[1]);
+      pinchBase = state.fontSize; pinchLast = pinchBase;
+      return;
+    }
+    if (e.touches.length !== 1) { single = false; return; }
+    single = true; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+  }, { passive: true });
+
+  doc.addEventListener("touchmove", (e) => {
+    if (!pinching || e.touches.length < 2 || !pinchStart) return;
+    const ratio = dist(e.touches[0], e.touches[1]) / pinchStart;
+    pinchLast = Math.max(60, Math.min(240, Math.round((pinchBase * ratio) / 5) * 5));
+    setFont(pinchLast);
+    debugLog("pinch font " + pinchLast + "%");
+  }, { passive: true });
+
+  doc.addEventListener("touchend", (e) => {
+    if (pinching) { if (e.touches.length < 2) pinching = false; return; }
+    if (!single) return;
+    single = false;
+    const t = e.changedTouches[0];
+    if (Math.abs(t.clientX - x0) < 20 && Math.abs(t.clientY - y0) < 20) toggleChrome();
+  }, { passive: true });
+  doc.addEventListener("touchcancel", () => { single = false; pinching = false; });
+
+  // Desktop: click toggles (guarded so touch's synthesized click doesn't).
+  doc.addEventListener("mousedown", (e) => { mx = e.clientX; my = e.clientY; });
+  doc.addEventListener("mouseup", (e) => {
+    if (touchUsed) return;
+    if (Math.abs(e.clientX - mx) < 10 && Math.abs(e.clientY - my) < 10) toggleChrome();
+  });
+}
 
 // Attach swipe + tap-zone + pinch handling to a DOM element.
 function attachGestures(target) {
@@ -635,9 +715,8 @@ dom.theme.addEventListener("click", cycleTheme);
 dom.toc.addEventListener("click", openToc);
 dom.tocOverlay.addEventListener("click", closeToc);
 
-// Persistent gesture surfaces — attach once (never per book, to avoid stacking
-// duplicate listeners). EPUB uses the overlay; PDF listens on its scroll area.
-attachGestures(dom.gestureLayer);
+// PDF gestures live on its scroll area (attach once). EPUB attaches its own
+// scroll-mode gestures per rendered section via a content hook.
 attachGestures(dom.pdfArea);
 
 document.addEventListener("keyup", onKey);

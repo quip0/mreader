@@ -4,7 +4,7 @@ A minimal, client-side reader for **EPUB** and **PDF**. No backend, no uploads �
 
 ## Features
 
-- 📖 EPUB (reflowable, paginated) and PDF rendering
+- 📖 EPUB (reflowable, continuous vertical scroll) and PDF rendering
 - 🗂️ Table of contents (EPUB navigation / PDF outline, with page-list fallback)
 - 📍 Remembers your last position per book (`localStorage`)
 - 🔠 Adjustable font size (EPUB)
