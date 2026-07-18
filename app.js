@@ -471,6 +471,7 @@ const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 function attachGestures(target) {
   let x0 = null, y0 = null, t0 = 0, tracking = false;
   let pinching = false, pinchStartDist = 0, pinchBase = 0, pinchLast = 0;
+  let touchUsed = false; // once true, ignore synthesized mouse events
 
   const begin = (x, y) => { x0 = x; y0 = y; t0 = Date.now(); tracking = true; };
   const finish = (x, y) => {
@@ -496,6 +497,7 @@ function attachGestures(target) {
   };
 
   target.addEventListener("touchstart", (e) => {
+    touchUsed = true;
     if (e.touches.length === 2) {
       // Two fingers → begin a pinch; cancel any single-finger tracking.
       tracking = false;
@@ -538,9 +540,11 @@ function attachGestures(target) {
   }, { passive: true });
   target.addEventListener("touchcancel", () => { tracking = false; pinching = false; });
 
-  // Mouse fallback so swipe/tap also work when testing on desktop.
-  target.addEventListener("mousedown", (e) => begin(e.clientX, e.clientY));
-  target.addEventListener("mouseup", (e) => finish(e.clientX, e.clientY));
+  // Mouse fallback for desktop only. On touch devices a tap also fires
+  // synthesized mouse events, which would double-toggle the bar — so once
+  // any touch is seen, the mouse handlers stand down.
+  target.addEventListener("mousedown", (e) => { if (!touchUsed) begin(e.clientX, e.clientY); });
+  target.addEventListener("mouseup", (e) => { if (!touchUsed) finish(e.clientX, e.clientY); });
 }
 
 /* ================= Font size (EPUB) ================= */
