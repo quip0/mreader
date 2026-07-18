@@ -47,7 +47,7 @@ const state = {
   rendition: null,
   pdf: null,
   pdfPage: 1,
-  pdfScale: 1.4,
+  pdfZoom: 1, // 1 = fit page width; pinch increases it
 };
 
 const THEMES = ["light", "sepia", "dark"];
@@ -391,9 +391,9 @@ function renderPdfPage(num) {
     const ratio = window.devicePixelRatio || 1;
     const containerW = dom.pdfArea.clientWidth || window.innerWidth;
     const base = page.getViewport({ scale: 1 });
-    // Fit page width to the screen, then sharpen with device pixel ratio.
-    const fit = Math.min(state.pdfScale, (containerW - 8) / base.width);
-    const viewport = page.getViewport({ scale: fit * ratio });
+    // Fit page width to the screen × the pinch zoom, then sharpen with DPR.
+    const cssScale = ((containerW - 8) / base.width) * state.pdfZoom;
+    const viewport = page.getViewport({ scale: cssScale * ratio });
 
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
@@ -411,6 +411,15 @@ function renderPdfPage(num) {
     dom.location.textContent = `${num} / ${pdf.numPages}`;
     savePosition({ page: num });
   });
+}
+
+// Cheap live feedback while pinching a PDF: CSS-scale the current canvas
+// relative to what it was rendered at; renderPdfPage() re-renders sharp on end.
+function pdfPinchPreview(zoom) {
+  const canvas = dom.pdfArea.querySelector("canvas");
+  if (!canvas) return;
+  canvas.style.transformOrigin = "top center";
+  canvas.style.transform = "scale(" + zoom / state.pdfZoom + ")";
 }
 
 /* ================= Navigation ================= */
@@ -434,9 +443,12 @@ function debugLog(msg) {
   dom.debugHud.textContent = msg;
 }
 
-// Attach swipe + tap-zone handling to a DOM element.
+const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+// Attach swipe + tap-zone + pinch handling to a DOM element.
 function attachGestures(target) {
   let x0 = null, y0 = null, t0 = 0, tracking = false;
+  let pinching = false, pinchStartDist = 0, pinchBase = 0, pinchLast = 0;
 
   const begin = (x, y) => { x0 = x; y0 = y; t0 = Date.now(); tracking = true; };
   const finish = (x, y) => {
@@ -458,15 +470,47 @@ function attachGestures(target) {
   };
 
   target.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+      // Two fingers → begin a pinch; cancel any single-finger tracking.
+      tracking = false;
+      pinching = true;
+      pinchStartDist = dist(e.touches[0], e.touches[1]);
+      pinchBase = state.kind === "pdf" ? state.pdfZoom : state.fontSize;
+      pinchLast = pinchBase;
+      return;
+    }
     if (e.touches.length !== 1) { tracking = false; return; }
     debugLog("touchstart");
     begin(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
+
+  target.addEventListener("touchmove", (e) => {
+    if (!pinching || e.touches.length < 2 || !pinchStartDist) return;
+    const ratio = dist(e.touches[0], e.touches[1]) / pinchStartDist;
+    if (state.kind === "epub") {
+      // Quantize to 5% steps so we don't reflow the book on every frame.
+      pinchLast = Math.max(60, Math.min(240, Math.round((pinchBase * ratio) / 5) * 5));
+      setFont(pinchLast);
+      debugLog("pinch font " + pinchLast + "%");
+    } else if (state.kind === "pdf") {
+      pinchLast = Math.max(1, Math.min(5, pinchBase * ratio));
+      pdfPinchPreview(pinchLast);
+      debugLog("pinch zoom " + pinchLast.toFixed(2));
+    }
+  }, { passive: true });
+
   target.addEventListener("touchend", (e) => {
+    if (pinching) {
+      if (e.touches.length < 2) {
+        pinching = false;
+        if (state.kind === "pdf") { state.pdfZoom = pinchLast; renderPdfPage(state.pdfPage); }
+      }
+      return;
+    }
     const t = e.changedTouches[0];
     finish(t.clientX, t.clientY);
   }, { passive: true });
-  target.addEventListener("touchcancel", () => { tracking = false; });
+  target.addEventListener("touchcancel", () => { tracking = false; pinching = false; });
 
   // Mouse fallback so swipe/tap also work when testing on desktop.
   target.addEventListener("mousedown", (e) => begin(e.clientX, e.clientY));
@@ -474,12 +518,15 @@ function attachGestures(target) {
 }
 
 /* ================= Font size (EPUB) ================= */
-function changeFont(delta) {
+function setFont(size) {
   if (state.kind !== "epub" || !state.rendition) return;
-  state.fontSize = Math.max(60, Math.min(240, state.fontSize + delta));
-  localStorage.setItem("mreader-font", state.fontSize);
-  state.rendition.themes.fontSize(state.fontSize + "%");
+  size = Math.max(60, Math.min(240, Math.round(size)));
+  if (size === state.fontSize) return;
+  state.fontSize = size;
+  localStorage.setItem("mreader-font", size);
+  state.rendition.themes.fontSize(size + "%");
 }
+function changeFont(delta) { setFont(state.fontSize + delta); }
 
 /* ================= Table of contents ================= */
 function openToc() {
