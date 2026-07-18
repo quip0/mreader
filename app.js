@@ -23,7 +23,9 @@ const dom = {
   viewport: el("viewport"),
   epubArea: el("epub-area"),
   pdfArea: el("pdf-area"),
+  gestureLayer: el("gesture-layer"),
   loading: el("loading"),
+  debugHud: el("debug-hud"),
   prev: el("btn-prev"),
   next: el("btn-next"),
   progressFill: el("progress-fill"),
@@ -289,6 +291,7 @@ function teardown() {
   dom.epubArea.classList.add("hidden");
   dom.pdfArea.innerHTML = "";
   dom.pdfArea.classList.add("hidden");
+  dom.gestureLayer.classList.add("hidden");
   clearToc();
   closeToc();
 }
@@ -300,8 +303,15 @@ async function openBook(record) {
   showReader(record.title);
   setLoading(true);
   const buffer = await record.blob.arrayBuffer();
-  if (record.kind === "epub") renderEpub(buffer);
-  else renderPdf(buffer);
+  if (record.kind === "epub") {
+    // Overlay captures gestures above the iframe.
+    dom.gestureLayer.classList.remove("hidden");
+    renderEpub(buffer);
+  } else {
+    // PDF area is a normal scrollable element — listen on it directly so
+    // vertical scrolling still works.
+    renderPdf(buffer);
+  }
 }
 
 function savePosition(value) {
@@ -326,10 +336,8 @@ function renderEpub(buffer) {
   rendition.themes.fontSize(state.fontSize + "%");
   applyEpubTheme();
 
-  // Register the gesture hook BEFORE display so the first section gets it too.
-  rendition.hooks.content.register((contents) => {
-    attachGestures(contents.document);
-  });
+  // Gestures are captured by an overlay in THIS document (see openBook),
+  // so they never depend on touch events crossing the iframe boundary.
 
   const saved = state.record && state.record.pos;
   rendition.display(saved && saved.cfi ? saved.cfi : undefined).then(() => setLoading(false));
@@ -362,7 +370,6 @@ function updateEpubProgress() {
 /* ================= PDF ================= */
 function renderPdf(buffer) {
   dom.pdfArea.classList.remove("hidden");
-  attachGestures(dom.pdfArea);
   pdfjsLib.getDocument({ data: buffer }).promise.then((pdf) => {
     state.pdf = pdf;
     const saved = state.record && state.record.pos;
@@ -420,17 +427,15 @@ function toggleChrome() {
 }
 
 /* ================= Gestures (swipe + tap zones) ================= */
-// `target` may be a DOM element (PDF area) or an iframe Document (EPUB).
+const DEBUG = location.hash.includes("debug");
+function debugLog(msg) {
+  if (!DEBUG) return;
+  dom.debugHud.classList.remove("hidden");
+  dom.debugHud.textContent = msg;
+}
+
+// Attach swipe + tap-zone handling to a DOM element.
 function attachGestures(target) {
-  const isDoc = target.nodeType === 9; // Node.DOCUMENT_NODE
-  const listenOn = target;
-  const styleEls = isDoc ? [target.documentElement, target.body] : [target];
-
-  // Claim horizontal gestures for ourselves; let the browser keep vertical
-  // scrolling. Without this, mobile browsers can hijack the horizontal swipe
-  // (e.g. back/forward navigation) and our handler never sees a clean gesture.
-  styleEls.forEach((el) => { if (el && el.style) el.style.touchAction = "pan-y"; });
-
   let x0 = null, y0 = null, t0 = 0, tracking = false;
 
   const begin = (x, y) => { x0 = x; y0 = y; t0 = Date.now(); tracking = true; };
@@ -440,12 +445,11 @@ function attachGestures(target) {
     const dx = x - x0, dy = y - y0;
     const adx = Math.abs(dx), ady = Math.abs(dy);
     const dt = Date.now() - t0;
+    debugLog(`dx=${dx.toFixed(0)} dy=${dy.toFixed(0)} dt=${dt}ms`);
 
     if (adx > 40 && adx > ady * 1.3) {
-      // Horizontal swipe → turn page.
-      if (dx < 0) goNext(); else goPrev();
+      if (dx < 0) goNext(); else goPrev(); // swipe left = next
     } else if (adx < 12 && ady < 12 && dt < 350) {
-      // Tap → left third prev, right third next, middle toggles chrome.
       const w = window.innerWidth;
       if (x < w * 0.3) goPrev();
       else if (x > w * 0.7) goNext();
@@ -453,19 +457,20 @@ function attachGestures(target) {
     }
   };
 
-  listenOn.addEventListener("touchstart", (e) => {
+  target.addEventListener("touchstart", (e) => {
     if (e.touches.length !== 1) { tracking = false; return; }
+    debugLog("touchstart");
     begin(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
-  listenOn.addEventListener("touchend", (e) => {
+  target.addEventListener("touchend", (e) => {
     const t = e.changedTouches[0];
     finish(t.clientX, t.clientY);
   }, { passive: true });
-  listenOn.addEventListener("touchcancel", () => { tracking = false; });
+  target.addEventListener("touchcancel", () => { tracking = false; });
 
   // Mouse fallback so swipe/tap also work when testing on desktop.
-  listenOn.addEventListener("mousedown", (e) => begin(e.clientX, e.clientY));
-  listenOn.addEventListener("mouseup", (e) => finish(e.clientX, e.clientY));
+  target.addEventListener("mousedown", (e) => begin(e.clientX, e.clientY));
+  target.addEventListener("mouseup", (e) => finish(e.clientX, e.clientY));
 }
 
 /* ================= Font size (EPUB) ================= */
@@ -557,6 +562,12 @@ dom.fontDec.addEventListener("click", () => changeFont(-10));
 dom.theme.addEventListener("click", cycleTheme);
 dom.toc.addEventListener("click", openToc);
 dom.tocOverlay.addEventListener("click", closeToc);
+
+// Persistent gesture surfaces — attach once (never per book, to avoid stacking
+// duplicate listeners). EPUB uses the overlay; PDF listens on its scroll area.
+attachGestures(dom.gestureLayer);
+attachGestures(dom.pdfArea);
+
 document.addEventListener("keyup", onKey);
 window.addEventListener("resize", () => {
   if (state.kind === "pdf" && state.pdf) renderPdfPage(state.pdfPage);

@@ -50,8 +50,11 @@
       <main class="viewport" id="viewport">
         <div id="epub-area" class="epub-area hidden"></div>
         <div id="pdf-area" class="pdf-area hidden"></div>
+        <!-- Transparent gesture catcher for EPUB (sits above the iframe). -->
+        <div id="gesture-layer" class="gesture-layer hidden"></div>
         <div id="loading" class="loading hidden"><div class="spinner"></div></div>
       </main>
+      <div id="debug-hud" class="debug-hud hidden"></div>
 
       <button class="nav nav-prev" id="btn-prev" title="Previous">‹</button>
       <button class="nav nav-next" id="btn-next" title="Next">›</button>
